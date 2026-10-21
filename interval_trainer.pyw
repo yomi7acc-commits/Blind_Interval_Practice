@@ -2,8 +2,8 @@
 
 モード: 音程 / コード構成音 / ディグリー / 調号 / 移調楽器 / 五度圏（設定で切り替え）
 答えの入力: 音名 A-G に続けて ♯ / ♭ を付ける
-  ♯: #  +  音名キーの右隣のキー（例: e→r）  →  ↑
-  ♭: b  -  音名キーの左隣のキー（例: e→w。A だけは Shift）  ←  ↓
+  ♯: #  +  音名キーの右隣のキー（例: e→r）  右Shift  →  ↑
+  ♭: b  -  音名キーの左隣のキー（例: e→w）  左Shift  ←  ↓
   ダブル♯: x（または ♯ を2回）
 Space: 次へ（コード構成音では音の区切り） / Enter: 判定（未入力なら答え表示、表示後なら次へ）
 Backspace: 1文字消す / Tab: 自動の開始・停止 / Esc: 設定の開閉 / 右クリック: メニュー / ドラッグで移動
@@ -85,7 +85,7 @@ MODES = [("interval", "音程"), ("chord", "コード構成音"), ("degree", "�
          ("keysig", "調号"), ("transpose", "移調楽器"), ("circle", "五度圏")]
 
 # 音名キーの左隣・右隣のキー（QWERTY / JIS 共通）。左＝♭、右＝♯
-# A の左隣は CapsLock なので、代わりに Shift だけを押して離すと ♭（App.on_key_release）
+# Shift だけを押して離すと、左 Shift は ♭、右 Shift は ♯（App.on_key_release）。A の左隣は CapsLock なので A の ♭ はこちらで
 NEIGHBORS = {"a": ("", "s"), "b": ("v", "n"), "c": ("x", "v"), "d": ("s", "f"),
              "e": ("w", "r"), "f": ("d", "g"), "g": ("f", "h")}
 ARROWS = {"Right": "#", "Up": "#", "Left": "b", "Down": "b"}
@@ -170,6 +170,15 @@ def sig_text(n, sign):
 
 def has_double(names):
     return any("♯♯" in n or "♭♭" in n for n in names)
+
+
+def right_shift_down():
+    """右 Shift が押されているか。Windows の Tk は左右とも Shift_L と報告するので OS に聞く。"""
+    try:
+        import ctypes
+        return bool(ctypes.windll.user32.GetKeyState(0xA1) & 0x8000)  # VK_RSHIFT
+    except Exception:
+        return False
 
 
 def midi_freq(m):
@@ -703,7 +712,7 @@ class App:
                           ("異名同音も正解にする（D♯ = E♭）", self.enh_var)):
             tk.Checkbutton(win, text=text, variable=var, command=self.save, **opt).pack(anchor="w")
 
-        tk.Label(win, text="♯: #  右隣のキー  → ↑　　♭: b  左隣のキー（A は Shift）  ← ↓\n"
+        tk.Label(win, text="♯: #  右隣のキー  右Shift  → ↑\n♭: b  左隣のキー  左Shift  ← ↓\n"
                            "Space 次へ / Enter 判定 / Tab 自動 / 右クリック メニュー",
                  bg=BG, fg=DIM, font=(FONT_JP, 8), justify="left").pack(anchor="w", pady=(10, 0))
 
@@ -871,15 +880,15 @@ class App:
         return ch in "#+b-x"
 
     def on_key_release(self, e):
-        """A の直後に Shift だけを押して離したら ♭ にする。"""
+        """音名の直後に Shift だけを押して離したら、左 Shift は ♭、右 Shift は ♯ にする。"""
         if e.keysym not in ("Shift_L", "Shift_R") or not getattr(self, "shift_alone", False):
             return
         self.shift_alone = False
         q = self.question
         if q is None or self.revealed or q["kind"] == "keysig":
             return
-        if self.typed.split(" ")[-1][:1] == "a" and len(self.typed) < (30 if q["kind"] == "notes" else 10):
-            self.typed += "b"
+        if self.typed.split(" ")[-1][:1] in NEIGHBORS and len(self.typed) < (30 if q["kind"] == "notes" else 10):
+            self.typed += "#" if self.shift_right else "b"
             self.show_typed()
 
     def on_key(self, e):
@@ -890,6 +899,7 @@ class App:
         # Shift は離したときに判定する（Shift+3 の # などと区別するため）
         self.shift_alone = key in ("Shift_L", "Shift_R")
         if self.shift_alone:
+            self.shift_right = right_shift_down() if winsound else key == "Shift_R"
             return None
         q = self.question
         typing = q is not None and not self.revealed
