@@ -1,6 +1,7 @@
 """PCの片隅で使う音楽理論トレーニングツール。
 
 モード: 音程 / コード構成音 / ディグリー / 調号 / 移調楽器 / 五度圏（設定で切り替え）
+音名の表記: C D E / ド レ ミ（設定で切り替え。ドレミ表記でも入力は c=ド d=レ … b=シ）
 答えの入力: 音名 A-G に続けて ♯ / ♭ を付ける
   ♯: #  +  音名キーの右隣のキー（例: e→r）  右Shift  →  ↑
   ♭: b  -  音名キーの左隣のキー（例: e→w）  左Shift  ←  ↓
@@ -112,6 +113,7 @@ DEFAULTS = {
     "clear_bg": True,
     "root_sharp": True,
     "root_flat": True,
+    "notation": "letter",  # letter (C D E) / solfege (ド レ ミ)
     "geometry": "",
 }
 
@@ -168,6 +170,23 @@ def sig_text(n, sign):
     return "調号なし" if n == 0 else f"{'♯' if sign == '#' else '♭'}×{n}"
 
 
+SOLFEGE = {"C": "ド", "D": "レ", "E": "ミ", "F": "ファ", "G": "ソ", "A": "ラ", "B": "シ"}
+
+
+def nn(cfg, name):
+    """音名を表示用に。ドレミ表記なら 'E♭' → 'ミ♭'。"""
+    if cfg.get("notation") == "solfege" and name[:1] in SOLFEGE:
+        return SOLFEGE[name[0]] + name[1:]
+    return name
+
+
+def kn(cfg, name):
+    """調名を表示用に。'C♯m' はドレミ表記なら 'ド♯短調'、長調は 'ミ長調'。"""
+    if cfg.get("notation") != "solfege":
+        return name
+    return nn(cfg, name[:-1]) + "短調" if name.endswith("m") else nn(cfg, name) + "長調"
+
+
 def has_double(names):
     return any("♯♯" in n or "♭♭" in n for n in names)
 
@@ -208,8 +227,8 @@ def gen_interval(cfg):
     base = 60 + root[2] if up else 72 + root[2]
     if base > 76:
         base -= 12
-    return dict(main=root[0], line1=iv[0], line2=f"{'↑' if up else '↓'}  {iv[1]}",
-                kind="note", answer=answer, expect=[answer],
+    return dict(main=nn(cfg, root[0]), line1=iv[0], line2=f"{'↑' if up else '↓'}  {iv[1]}",
+                kind="note", answer=nn(cfg, answer), expect=[answer],
                 tags=[f"音程:{iv[0]}{'↑' if up else '↓'}", f"ルート:{root[0]}"],
                 sound=[base, base + (iv[2] if up else -iv[2])])
 
@@ -220,7 +239,7 @@ def gen_chord(cfg):
     names = [spell(root[1], root[2], s, st)[0] for s, st in zip(semis, steps)]
     base = 60 + root[2]
     return dict(main=root[0] + sym, line1="構成音", line2="スペース区切り",
-                kind="notes", answer=" ".join(names), expect=names,
+                kind="notes", answer=" ".join(nn(cfg, n) for n in names), expect=names,
                 tags=[f"コード:{sym or 'M'}", f"ルート:{root[0]}"],
                 sound=[base + s for s in semis])
 
@@ -234,8 +253,8 @@ def gen_degree(cfg):
     numeral, quality = table[d]
     root = spell(key[1], key[2], MAJOR_SCALE[d], d)[0]
     base = 60 + (key[2] + MAJOR_SCALE[d]) % 12
-    return dict(main=numeral, line1=f"キー {key[0]}", line2="ルート音を入力",
-                kind="note", lenient=True, answer=root + quality, expect=[root],
+    return dict(main=numeral, line1=f"キー {nn(cfg, key[0])}", line2="ルート音を入力",
+                kind="note", lenient=True, answer=nn(cfg, root) + quality, expect=[root],
                 tags=[f"ディグリー:{numeral}", f"キー:{key[0]}"],
                 sound=[base + s for s in CHORD_BY_SYM[quality][1]])
 
@@ -246,11 +265,11 @@ def gen_keysig(cfg):
     tonic = [60 + pc + s for s in (0, 4, 7)]
     if pick_dir(cfg["keysig_dir"], "sig2key", "key2sig"):
         return dict(main=sig_text(n, sign), line1="何調？", line2="短調は m を付ける",
-                    kind="keyname", answer=f"{name} / {minor}", expect=(name, minor),
+                    kind="keyname", answer=f"{kn(cfg, name)} / {kn(cfg, minor)}", expect=(name, minor),
                     tags=[f"調号:{sig_text(n, sign)}→調"], sound=tonic)
     is_minor = random.random() < 0.5
     tonic_minor = [60 + (pc + 9) % 12 + s for s in (0, 3, 7)]
-    return dict(main=minor if is_minor else name, line1="調号は？", line2="例: 4#  3b  0",
+    return dict(main=kn(cfg, minor if is_minor else name), line1="調号は？", line2="例: 4#  3b  0",
                 kind="keysig", answer=sig_text(n, sign), expect=(n, sign),
                 tags=[f"調号:調→{sig_text(n, sign)}"], sound=tonic_minor if is_minor else tonic)
 
@@ -262,8 +281,8 @@ def gen_transpose(cfg):
     w2c = pick_dir(cfg["transpose_dir"], "w2c", "c2w")
     answer, _ = spell(note[1], note[2], semis, steps, up=not w2c)
     base = 64 + note[2] if w2c else 52 + note[2]
-    return dict(main=note[0], line1=f"in {inst}  {'記譜 → 実音' if w2c else '実音 → 記譜'}",
-                line2="実音は？" if w2c else "記譜は？", kind="note", answer=answer, expect=[answer],
+    return dict(main=nn(cfg, note[0]), line1=f"in {inst}  {'記譜 → 実音' if w2c else '実音 → 記譜'}",
+                line2="実音は？" if w2c else "記譜は？", kind="note", answer=nn(cfg, answer), expect=[answer],
                 tags=[f"移調:in {inst} {'記譜→実音' if w2c else '実音→記譜'}"],
                 sound=[base, base - semis if w2c else base + semis])
 
@@ -274,8 +293,8 @@ def gen_circle(cfg):
     semis, steps = (7, 4) if up5 else (5, 3)
     answer, _ = spell(root[1], root[2], semis, steps)
     base = 60 + root[2]
-    return dict(main=root[0], line1="5度上" if up5 else "4度上", line2="五度圏",
-                kind="note", answer=answer, expect=[answer],
+    return dict(main=nn(cfg, root[0]), line1="5度上" if up5 else "4度上", line2="五度圏",
+                kind="note", answer=nn(cfg, answer), expect=[answer],
                 tags=[f"五度圏:{'5度上' if up5 else '4度上'}", f"ルート:{root[0]}"],
                 sound=[base, base + semis])
 
@@ -317,14 +336,14 @@ def make_question(cfg):
 
 
 # ---------- 判定 ----------
-def format_typed(kind, typed):
-    """入力中の文字を ♯ ♭ 付きで見せる。"""
+def format_typed(cfg, kind, typed):
+    """入力中の文字を ♯ ♭ 付きで見せる（ドレミ表記ならドレミで）。"""
     if kind == "keysig":
         return typed.replace("#", "♯").replace("+", "♯").replace("b", "♭").replace("-", "♭")
     out = []
     for token in typed.split(" "):
         p = parse_lead(token)
-        out.append(p[0] + p[2] if p else token)
+        out.append(nn(cfg, p[0]) + p[2] if p else token)
     return " ".join(out)
 
 
@@ -533,6 +552,7 @@ class App:
             c.config(width=need)
             m = self.master
             if m.winfo_ismapped():
+                m.update_idletasks()  # 設定直後の位置がまだ反映されていないことがある
                 m.geometry(f"+{m.winfo_x() + old - need}+{m.winfo_y()}")  # 右端を固定
         self.ans_lbl.move_to(need - 16 * s, h + 4 * s)
         self.sub_lbl.move_to(need - 16 * s, h + 6 * s)
@@ -692,6 +712,15 @@ class App:
         tk.Label(trow, text="秒", bg=BG, fg=DIM, font=(FONT_JP, 9)).pack(side="left")
 
         heading(win, "表示")
+        self.notation_var = tk.StringVar(value=self.cfg["notation"])
+        nrow = tk.Frame(win, bg=BG)
+        nrow.pack(anchor="w", pady=(0, 4))
+        tk.Label(nrow, text="音名の表記", bg=BG, fg=FG, font=(FONT_JP, 9)).pack(side="left", padx=(0, 8))
+        for text, val in (("C D E", "letter"), ("ド レ ミ", "solfege")):
+            tk.Radiobutton(nrow, text=text, value=val, variable=self.notation_var,
+                           command=self.on_mode, **opt).pack(side="left", padx=(0, 6))
+        tk.Label(nrow, text="入力は c=ド d=レ e=ミ f=ファ g=ソ a=ラ b=シ", bg=BG, fg=DIM,
+                 font=(FONT_JP, 8)).pack(side="left", padx=(4, 0))
         arow = tk.Frame(win, bg=BG)
         arow.pack(anchor="w", fill="x")
         tk.Label(arow, text="待機中の濃さ", bg=BG, fg=FG, font=(FONT_JP, 9)).pack(side="left")
@@ -788,6 +817,7 @@ class App:
             auto_sec=self.num(self.auto_var, DEFAULTS["auto_sec"]),
             reveal_sec=self.num(self.reveal_var, DEFAULTS["reveal_sec"]),
             idle_alpha=self.num(self.alpha_var, DEFAULTS["idle_alpha"]),
+            notation=self.notation_var.get(),
             sound=self.sound_var.get(),
             topmost=self.top_var.get(),
             avoid_double=self.dbl_var.get(),
@@ -939,7 +969,7 @@ class App:
     def show_typed(self):
         if self.revealed:
             return
-        text = format_typed(self.question["kind"], self.typed)
+        text = format_typed(self.cfg, self.question["kind"], self.typed)
         self.ans_lbl.config(text=text + "_" if self.typed else "", fg=FG)
 
     def judge(self):
@@ -948,6 +978,10 @@ class App:
         if not res:
             return
         status, shown = res
+        if q["kind"] == "keyname":
+            shown = kn(self.cfg, shown)
+        elif q["kind"] != "keysig":
+            shown = " ".join(nn(self.cfg, n) for n in shown.split())
         ok = status == "ok" or (status == "enh" and self.cfg["enharmonic_ok"])
         self.last_time = time.monotonic() - self.started
         self.answered += 1
