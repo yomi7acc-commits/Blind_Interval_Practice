@@ -15,20 +15,32 @@ PC の画面の片隅に浮かべておける、音程（インターバル）�
 - **自動送りモード** — 一定の秒数で答えを表示し、次の問題に進みます。楽器で弾く練習にも使えます。
 - 答えを表示するときに、ルート音と答えの音を鳴らせます（Windows のビープ音）。
 
-## 必要なもの
+## ダウンロード（かんたん）
 
-- Windows 10 / 11
-- Python 3.9 以上（tkinter 付き。python.org の標準インストーラーなら入っています）
+[Releases](https://github.com/yomi7acc-commits/Blind_Interval_Practice/releases/latest) から `BlindIntervalPractice.exe` をダウンロードして、ダブルクリックするだけです。インストールも Python も不要です（Windows 10 / 11）。
 
-外部ライブラリは不要です。
+- 初回は「Windows によって PC が保護されました」と出ることがあります。署名のない個人製アプリのためです。「詳細情報」→「実行」で起動できます。
+- 設定は `%APPDATA%\BlindIntervalPractice` に保存されます。
 
-## 使い方
+## Python で動かす
 
+Python 3.9 以上（tkinter 付き。python.org の標準インストーラーなら入っています）があれば、外部ライブラリなしで動きます。
 `interval_trainer.pyw` をダブルクリックで起動します（コンソールは出ません）。
 
 ```bash
 pythonw interval_trainer.pyw
 ```
+
+EXE を自分で作る場合:
+
+```bash
+pip install pyinstaller pillow
+build.bat
+```
+
+`dist\BlindIntervalPractice.exe` ができます。
+
+## 使い方
 
 | 操作 | 内容 |
 |---|---|
@@ -50,7 +62,7 @@ pythonw interval_trainer.pyw
 
 ## 設定
 
-Esc か右クリックメニューから開きます。設定とウィンドウの位置は、同じフォルダーの `interval_trainer.json` に保存されます。
+Esc か右クリックメニューから開きます。設定とウィンドウの位置は `interval_trainer.json` に保存されます（Python 版は同じフォルダー、EXE 版は `%APPDATA%\BlindIntervalPractice`）。
 
 - 出題する音程（短2度〜完全8度）
 - ルート音に ♯ / ♭ を含めるか

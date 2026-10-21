@@ -6,7 +6,9 @@ Space: 次へ / Enter: 判定（未入力なら答え表示、表示後なら次
 1: 自動の開始・停止 / Esc: 設定の開閉 / 右クリック: メニュー / ドラッグで移動
 """
 import json
+import os
 import random
+import sys
 import threading
 import time
 import tkinter as tk
@@ -17,7 +19,13 @@ try:
 except ImportError:  # Windows 以外では音なし
     winsound = None
 
-SETTINGS_FILE = Path(__file__).with_name("interval_trainer.json")
+if getattr(sys, "frozen", False):
+    # EXE 版は展開先が毎回変わるので、設定は %APPDATA% に置く
+    _dir = Path(os.environ.get("APPDATA", Path.home())) / "BlindIntervalPractice"
+    _dir.mkdir(parents=True, exist_ok=True)
+    SETTINGS_FILE = _dir / "interval_trainer.json"
+else:
+    SETTINGS_FILE = Path(__file__).with_name("interval_trainer.json")
 
 LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
 NATURAL_PC = [0, 2, 4, 5, 7, 9, 11]
